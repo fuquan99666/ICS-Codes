@@ -6,7 +6,7 @@
 // 现在的写法：直接从 ebp 计算出参数区起点，再按 sizeof(type) 逐个前进。
 
 // 这个 ifndef xxx endif 写法 大家可以学习一下，如何保证一个头文件只被包含一次
-// 这在复杂项目中非常重要！
+// 这在复杂项目中非常重要！e.g. <stdint.h> 里就有类似写法
 #ifndef MY_STDARG_H
 #define MY_STDARG_H
 
