@@ -18,62 +18,64 @@
 #ifdef RUNTIME
 #define _GNU_SOURCE
 #include <stdio.h>
-#include <stdlib.h>
 #include <dlfcn.h>
-#include <unistd.h>
 
-static void log_malloc_event(size_t size, void *ptr)
-{
-    char buf[128];
-    int n = snprintf(buf, sizeof(buf), "malloc(%zu) = %p\n", size, ptr);
-    if (n > 0) {
-        write(STDERR_FILENO, buf, (size_t)n);
-    }
+// Using frpintf(stderr, ...) instead of printf(...) to avoid recursion problem (printf uses malloc) !
+// Below is the example from jyy , but in my archlinux desktop(maybe different glibc implementation?), it failed because of the recursion problem (free and dlsym)
+//void *malloc(size_t size) {
+    //static void *(*real_malloc)(size_t) = NULL;
+		//if (!real_malloc) {
+			//real_malloc = dlsym(RTLD_NEXT, "malloc");
+		//}
+
+    //void *ptr = real_malloc(size);
+    //fprintf(stderr, "malloc(%zu) = %p\n", size, ptr);
+    
+    //return ptr;
+//}
+
+//void free(void *ptr) {
+    //if (!ptr) return;
+    //static void (*real_free)(void*) = NULL;
+		//if (!real_free) {
+			//real_free = dlsym(RTLD_NEXT, "free");
+		//}
+    
+    //fprintf(stderr, "free(%p)\n", ptr);
+    //real_free(ptr);
+//}
+
+// A safer version by using constructor to get real malloc and free
+static void *(*real_malloc)(size_t) = NULL;
+static void (*real_free)(void *) = NULL;
+
+// 2. 初始化函数：在动态库被加载时，立刻执行一次
+__attribute__((constructor))
+static void init_mymalloc(void) {
+    // 此时程序刚启动，不会使用你的 malloc，所以 dlsym 是绝对安全的
+    real_malloc = dlsym(RTLD_NEXT, "malloc");
+    real_free = dlsym(RTLD_NEXT, "free");
 }
 
-static void log_free_event(void *ptr)
-{
-    char buf[128];
-    int n = snprintf(buf, sizeof(buf), "free(%p)\n", ptr);
-    if (n > 0) {
-        write(STDERR_FILENO, buf, (size_t)n);
+void *malloc(size_t size) {
+    // 3. 兜底：极少数情况下初始化函数没执行完就被调用了
+    if (!real_malloc) {
+        return NULL; 
     }
-}
-
-/* malloc wrapper function */
-void *malloc(size_t size)
-{
-    void *(*mallocp)(size_t size);
-    char *error;
-
-    mallocp = dlsym(RTLD_NEXT, "malloc"); /* Get address of libc malloc */
-    if ((error = dlerror()) != NULL) {
-        fputs(error, stderr);
-        exit(1);
-    }
-    char *ptr = mallocp(size); /* Call libc malloc */
-    // printf("malloc(%zu) = %p\n", size, ptr);
-    log_malloc_event(size, ptr);
+    
+    void *ptr = real_malloc(size);
+    
+    fprintf(stderr, "malloc(%zu) = %p\n", size, ptr);
     return ptr;
 }
 
-/* free wrapper function */
-void free(void *ptr)
-{
-    void (*freep)(void *) = NULL;
-    char *error;
-
-    if (!ptr)
-        return;
-
-    freep = dlsym(RTLD_NEXT, "free"); /* Get address of libc free */
-    if ((error = dlerror()) != NULL) {
-        fputs(error, stderr);
-        exit(1);
-    }
-    // printf("free(%p)\n", ptr);
-    log_free_event(ptr);
-    freep(ptr); /* Call libc free */
+void free(void *ptr) {
+    if (!ptr) return;
+    if (!real_free) return; // 兜底保护
+    
+    real_free(ptr);
+    
+    fprintf(stderr, "free(%p)\n", ptr);
 }
 #endif
 /* $end interposer */
