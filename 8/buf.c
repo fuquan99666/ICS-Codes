@@ -4,7 +4,7 @@
 
 int main() {
 	// use setbuf to change the mode of stream buffer 
-	// setvbuf(stdout, NULL, _IONBF, 0);
+  setvbuf(stdout, NULL, _IONBF, 0);
 	printf("May not be printed twice");
 	pid_t p = fork();
 

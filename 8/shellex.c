@@ -119,7 +119,7 @@ int main()
     Signal(SIGINT, SIG_IGN);
     Signal(SIGTSTP, SIG_IGN);
     Signal(SIGTTIN, SIG_IGN);
-    Signal(SIGTTOU, SIG_IGN);
+    Signal(SIGTTOU, SIG_IGN); // 当在 waitfg 中，shell 作为非终端前台进程组的成员，试图抢占终端时，会收到 SIGTTOU 信号，默认行为是 STOP
     tcsetpgrp(STDIN_FILENO, shell_pgid);
 
     while (1) {
@@ -154,6 +154,7 @@ void eval(char *cmdline)
         if ((pid = Fork()) == 0) {
             // 子进程单独设置进程组，避免被 shell 的信号处理干扰
             setpgid(0, 0);
+            // 子进程使用默认信号处理
             Signal(SIGINT, SIG_DFL);
             Signal(SIGTSTP, SIG_DFL);
             Signal(SIGTTIN, SIG_DFL);
